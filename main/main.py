@@ -48,10 +48,13 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
 
                 for img0, img1, labels in dataloaders_dict[phase]:
                     optimizer.zero_grad()
-                    img0 = img0.to(device)
-                    img1 = img1.to(device)
+                    img01 = torch.cat([img0, img1], axis=0).to(device)
                     labels = labels.to(device)
-                    out, middle = net(images)
+                    out, middle = net(img01)
+                    out0, out1 = torch.split(out, args.batchsize, dim=0)
+                    loss = loss_function(
+                        out,
+                    )
                     loss = criterion(out, labels)
 
                     _, preds = torch.max(out, 1)

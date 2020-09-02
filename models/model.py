@@ -16,12 +16,7 @@ class ContrastiveResnetModel(nn.Module):
 
     def forward(self, x):
         hidden = self.resnet(x)
-        if self.mode == 0:
-            h = self.relu(self.fc1(hidden))
-            h = self.bn(h)
-            h = self.relu(self.fc2(h))
-            out = self.bn(h)
-            return out, hidden
-        elif self.mode == 1:
-            out = self.fc3(self.fc3(hidden))
-            return out
+        h = self.relu(self.fc1(hidden))
+        h = self.bn(h)
+        out = self.fc2(h)
+        return out, hidden
