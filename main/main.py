@@ -51,6 +51,9 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                     torch.set_grad_enabled(False)
 
                 for img0, img1, labels in dataloaders_dict[phase]:
+                    if phase == "train":
+                        tblogger.add_images(f"{epoch}/crop_flip", img0[:4])
+                        tblogger.add_images(f"{epoch}/colorjitter", img1[:4])
                     optimizer.zero_grad()
                     img01 = torch.cat([img0, img1], axis=0).to(device)
                     labels = labels.to(device)
@@ -69,17 +72,17 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                     if phase == "train":
                         loss.backward()
                         optimizer.step()
-                    epoch_loss += float(loss.item()) * images.size(0)
-                    epoch_correct += torch.sum(preds == labels.data)
+                    epoch_loss += float(loss.item()) * img0.size(0)
+                    # epoch_correct += torch.sum(preds == labels.data)
 
                 epoch_loss = epoch_loss / len(dataloaders_dict[phase].dataset)
-                epoch_acc = epoch_correct.double() / len(
-                    dataloaders_dict[phase].dataset
-                )
+                # epoch_acc = epoch_correct.double() / len(
+                #     dataloaders_dict[phase].dataset
+                # )
 
                 Loss[phase][epoch] = epoch_loss
-                Acc[phase][epoch] = epoch_acc
-                print("{} Loss:{:.4f} Acc:{:.4f}".format(phase, epoch_loss, epoch_acc))
+                # Acc[phase][epoch] = epoch_acc
+                print("{} Loss:{:.4f} ".format(phase, epoch_loss))
 
                 if tfboard:
                     tblogger.add_scaler("{}/Loss".format(phase), epoch_loss, epoch)
@@ -116,10 +119,10 @@ def main(args):
     data["x_test"] = x_test
     data["y_train"] = y_train
     data["y_test"] = y_test
-    with open(os.path.join(args.output, "data.json"), "wb") as f:
+    with open(os.path.join(args.output, "data.json"), "w") as f:
         json.dump(data, f, indent=4)
 
-    net = ContrastiveResnetModel(num_classes=args.n_cls)
+    net = ContrastiveResnetModel(out_dim=args.n_cls)
     net.to(device)
 
     for name, param in net.named_parameters():
@@ -140,7 +143,7 @@ def main(args):
 
     dataloaders_dict = {"train": train_dataloader, "test": test_dataloader}
 
-    optimizer = torch.optim.Adam(net.parameters(), lr=args.lr, momentum=0.9)
+    optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     criterion = nn.CrossEntropyLoss()
 
     trainer(
@@ -170,7 +173,7 @@ if __name__ == "__main__":
     parser.add_argument("--gpuid", type=str)
 
     args = parser.parse_args()
-    with open(os.path.join(args.output, "params.json"), "wb") as f:
+    with open(os.path.join(args.output, "params.json"), "w") as f:
         json.dump(args.__dict__, f, indent=4)
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpuid
