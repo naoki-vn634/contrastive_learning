@@ -31,9 +31,3 @@ def ContrastiveLoss(out0, out1, t=2.0):
 
     loss = torch.mean(loss)
     return loss
-
-
-a = torch.rand(16, 2208)
-b = torch.rand(16, 2208)
-matrix = ContrastiveLoss(a, b)
-print(matrix)

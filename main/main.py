@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 import torch
@@ -14,6 +15,9 @@ from img_preprocess import ImageDataset, ImageTransform
 
 sys.path.append("../models/")
 from model import ContrastiveResnetModel
+
+sys.path.append("../utils/")
+from loss_func import ContrastiveLoss
 
 
 def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, tfboard):
@@ -52,10 +56,13 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                     labels = labels.to(device)
                     out, middle = net(img01)
                     out0, out1 = torch.split(out, args.batchsize, dim=0)
-                    loss = loss_function(
-                        out,
-                    )
-                    loss = criterion(out, labels)
+                    if args.train_mode == 0:
+                        loss = ContrastiveLoss(out0, out1)
+                    if args.train_mode == 1:
+                        out = net.fc3(middle)
+                        out0, out1 = torch.split(out, args.batchsize, dim=0)
+                        for out_ in [out0, out1]:
+                            loss += criterion(out, labels)
 
                     _, preds = torch.max(out, 1)
 
@@ -74,9 +81,8 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                 Acc[phase][epoch] = epoch_acc
                 print("{} Loss:{:.4f} Acc:{:.4f}".format(phase, epoch_loss, epoch_acc))
 
-                # if tfboard:
-                #     tblogger.add_scaler('{}/Loss'.format(phase),epoch_loss,epoch)
-                #     tblogger.add_scaler('{}/Acc'.format(phase),epoch_acc,epoch)
+                if tfboard:
+                    tblogger.add_scaler("{}/Loss".format(phase), epoch_loss, epoch)
 
 
 def main(args):
@@ -104,15 +110,20 @@ def main(args):
     print("|-- No : ", label.count(0))
     print("|-- Garbage: ", label.count(2))
 
+    data = dict()
     x_train, x_test, y_train, y_test = train_test_split(img_path, label, test_size=0.20)
+    data["x_train"] = x_train
+    data["x_test"] = x_test
+    data["y_train"] = y_train
+    data["y_test"] = y_test
+    with open(os.path.join(args.output, "data.json"), "wb") as f:
+        json.dump(data, f, indent=4)
+
     net = ContrastiveResnetModel(num_classes=args.n_cls)
     net.to(device)
 
     for name, param in net.named_parameters():
-        if "fc" in name:
-            param.require_grad = True
-        else:
-            param.require_grad = False
+        param.require_grad = True
 
     train_dataset = ImageDataset(x_train, y_train, transform=transforms)
     train_dataloader = torch.utils.data.DataLoader(
@@ -146,6 +157,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--train_mode", type=int, help="0:con, 1:joint")
     parser.add_argument(
         "--input", type=str, default="/mnt/aoni02/matsunaga/200313_global-model/train"
     )
@@ -158,6 +170,8 @@ if __name__ == "__main__":
     parser.add_argument("--gpuid", type=str)
 
     args = parser.parse_args()
+    with open(os.path.join(args.output, "params.json"), "wb") as f:
+        json.dump(args.__dict__, f, indent=4)
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpuid
     main(args)
