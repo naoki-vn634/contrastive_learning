@@ -1,5 +1,6 @@
 import cv2
 import torchvision.transforms as transforms
+from PIL import Image
 
 
 class ImageTransform(object):
@@ -8,7 +9,7 @@ class ImageTransform(object):
         self.transform = {
             "augment0": transforms.Compose(
                 [
-                    transforms.RandomResizedCrop(size=batchsize),
+                    transforms.RandomResizedCrop(size=200, scale=(0.8, 1.0)),
                     transforms.RandomHorizontalFlip(),
                     transforms.Resize(size),
                     transforms.ToTensor(),
@@ -42,7 +43,7 @@ class ImageDataset(object):
 
     def __getitem__(self, index):
         image = self.file_list[index]
-        img = cv2.imread(image)
+        img = Image.open(image)
         img0 = self.transform(img, "augment0")
         img1 = self.transform(img, "augment1")
 

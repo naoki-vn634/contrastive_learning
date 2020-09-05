@@ -1,29 +1,48 @@
 import argparse
+import cv2
 import json
 import os
 import sys
-import torch
-import torch.nn as nn
 from distutils.util import strtobool
 from glob import glob
-from torch.utils.tensorboard import SummaryWriter
 
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn as nn
+from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
+from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append("../preprocess/")
 from img_preprocess import ImageDataset, ImageTransform
 
+sys.path.append("../utils/")
+from loss_func import ContrastiveLoss
+
 sys.path.append("../models/")
 from model import ContrastiveResnetModel
 
-sys.path.append("../utils/")
-from loss_func import ContrastiveLoss
+
+def save_embedding(args, emb_0, emb_1, emb_2, tblogger, epoch, phase):
+    plt.figure()
+    plt.scatter(emb_0[:, 0], emb_0[:, 1], color="red", label="no", alpha=0.5)
+    plt.scatter(emb_1[:, 0], emb_1[:, 1], color="blue", label="yes", alpha=0.5)
+    plt.scatter(emb_2[:, 0], emb_2[:, 1], color="green", label="garbage", alpha=0.5)
+    plt.title(f"Epoch {epoch} Embedding Space")
+    plt.legend()
+    plt.savefig(os.path.join(args.output, f"{epoch}_embedding.png"))
+    plt.close()
+    emb_img = cv2.imread(os.path.join(args.output, f"{epoch}_embedding.png"))
+    emb_img = np.transpose(emb_img, (2, 0, 1))
+    print(emb_img.shape)
+    tblogger.add_image(f"embedding/{phase}", emb_img, global_step=epoch)
 
 
 def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, tfboard):
     phase_list = ["train", "test"]
     Loss = {"train": [0] * args.epoch, "test": [0] * args.epoch}
-    Acc = {"train": [0] * args.epoch, "test": [0] * args.epoch}
+    # Acc = {"train": [0] * args.epoch, "test": [0] * args.epoch}
 
     torch.backends.cudnn.benchmark = True
 
@@ -41,7 +60,6 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                 continue
             else:
                 epoch_loss = 0
-                epoch_correct = 0
 
                 if phase == "train":
                     net.train()
@@ -50,7 +68,7 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                     net.eval()
                     torch.set_grad_enabled(False)
 
-                for img0, img1, labels in dataloaders_dict[phase]:
+                for i, (img0, img1, labels) in enumerate(dataloaders_dict[phase]):
                     if phase == "train":
                         tblogger.add_images(f"{epoch}/crop_flip", img0[:4])
                         tblogger.add_images(f"{epoch}/colorjitter", img1[:4])
@@ -58,7 +76,15 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                     img01 = torch.cat([img0, img1], axis=0).to(device)
                     labels = labels.to(device)
                     out, middle = net(img01)
-                    out0, out1 = torch.split(out, args.batchsize, dim=0)
+                    out0, out1 = torch.split(out, img0.size()[0], dim=0)
+
+                    epoch_feature = (
+                        middle if i == 0 else torch.cat([epoch_feature, middle], dim=0)
+                    )
+                    epoch_label = (
+                        labels if i == 0 else torch.cat([epoch_label, labels], dim=0)
+                    )
+
                     if args.train_mode == 0:
                         loss = ContrastiveLoss(out0, out1)
                     if args.train_mode == 1:
@@ -73,19 +99,28 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
                         loss.backward()
                         optimizer.step()
                     epoch_loss += float(loss.item()) * img0.size(0)
-                    # epoch_correct += torch.sum(preds == labels.data)
 
                 epoch_loss = epoch_loss / len(dataloaders_dict[phase].dataset)
-                # epoch_acc = epoch_correct.double() / len(
-                #     dataloaders_dict[phase].dataset
-                # )
 
                 Loss[phase][epoch] = epoch_loss
-                # Acc[phase][epoch] = epoch_acc
                 print("{} Loss:{:.4f} ".format(phase, epoch_loss))
 
                 if tfboard:
-                    tblogger.add_scaler("{}/Loss".format(phase), epoch_loss, epoch)
+                    tblogger.add_scalar("{}/Loss".format(phase), epoch_loss, epoch)
+
+                if epoch % args.checkpoint_iter == 0:
+                    ind_rand = np.random.randint(
+                        0, len(dataloaders_dict[phase].dataset), size=600
+                    )
+
+                    epoch_label = epoch_label.cpu().data.numpy()[ind_rand]
+                    tsne = TSNE(n_components=2).fit_transform(
+                        epoch_feature.cpu().data.numpy()[ind_rand]
+                    )
+                    emb_0 = tsne[np.where(epoch_label == 0)[0]]
+                    emb_1 = tsne[np.where(epoch_label == 1)[0]]
+                    emb_2 = tsne[np.where(epoch_label == 2)[0]]
+                    save_embedding(args, emb_0, emb_1, emb_2, tblogger, epoch, phase)
 
 
 def main(args):
@@ -165,14 +200,17 @@ if __name__ == "__main__":
         "--input", type=str, default="/mnt/aoni02/matsunaga/200313_global-model/train"
     )
     parser.add_argument("--epoch", type=int, default=20)
-    parser.add_argument("--batchsize", type=int, default=16)
+    parser.add_argument("--batchsize", type=int, default=128)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--tfboard", type=strtobool)
     parser.add_argument("--output", type=str)
     parser.add_argument("--n_cls", type=int)
     parser.add_argument("--gpuid", type=str)
+    parser.add_argument("--checkpoint_iter", type=int)
 
     args = parser.parse_args()
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
     with open(os.path.join(args.output, "params.json"), "w") as f:
         json.dump(args.__dict__, f, indent=4)
 

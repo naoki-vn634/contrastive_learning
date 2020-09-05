@@ -11,7 +11,8 @@ def cosine_matrix(out0, out1):
 
 
 def mask_matrix(matrix):
-    mask = 1 - torch.eye(matrix.size()[0])
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    mask = 1 - torch.eye(matrix.size()[0]).to(device)
     return matrix * mask
 
 
