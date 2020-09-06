@@ -1,4 +1,3 @@
-import cv2
 import torchvision.transforms as transforms
 from PIL import Image
 
@@ -21,6 +20,12 @@ class ImageTransform(object):
                         [transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)],
                         p=0.8,
                     ),
+                    transforms.Resize(size),
+                    transforms.ToTensor(),
+                ]
+            ),
+            "test": transforms.Compose(
+                [
                     transforms.Resize(size),
                     transforms.ToTensor(),
                 ]
