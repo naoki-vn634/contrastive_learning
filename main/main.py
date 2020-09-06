@@ -126,6 +126,7 @@ def trainer(args, net, dataloaders_dict, output, optimizer, criterion, device, t
 
                 if tfboard:
                     tblogger.add_scalar(f"{phase}/Loss", epoch_loss, epoch)
+                    tblogger.add_scalar(f"{phase}/Acc", epoch_correct, epoch)
 
                 ind_rand = np.random.randint(
                     0, len(dataloaders_dict[phase].dataset), size=600
@@ -191,12 +192,12 @@ def main(args):
     for name, param in net.named_parameters():
         param.require_grad = True
 
-    train_dataset = ImageDataset(x_train, y_train, transform=transforms)
+    train_dataset = ImageDataset(x_train, y_train, transform=transforms, phase='train')
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batchsize, num_workers=1, shuffle=True
     )
 
-    test_dataset = ImageDataset(x_test, y_test, transform=transforms)
+    test_dataset = ImageDataset(x_test, y_test, transform=transforms, phase='train')
     test_dataloader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
     )
