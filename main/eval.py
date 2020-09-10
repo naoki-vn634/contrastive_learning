@@ -31,7 +31,9 @@ def save_score(args, label_dict, score_dict):
     phase_list = ["train", "test", "val"]
     plt.figure()
     for phase in phase_list:
-        sns.distplot(score_dict[phase], label="phase")
+        print(np.max(score_dict[phase]))
+        sns.distplot(score_dict[phase], label=phase)
+    plt.xlim([-10000, 0])
     plt.legend()
     plt.savefig(os.path.join(args.output, "score.png"))
 

@@ -5,7 +5,7 @@ import torchvision.models as models
 class ContrastiveResnetModel(nn.Module):
     def __init__(self, mode=0, num_channels=3, hidden_size=2048, out_dim=2):
         super(ContrastiveResnetModel, self).__init__()
-        resnet = models.resnet50(pretrained=True)
+        resnet = models.resnet50(pretrained=False)
         self.mode = mode
         self.resnet = nn.Sequential(*list(resnet.children())[:-1])
         self.fc1 = nn.Linear(hidden_size, hidden_size)
