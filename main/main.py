@@ -149,7 +149,7 @@ def trainer(
                 0, len(dataloaders_dict[phase].dataset), size=600
             )
 
-            epoch_label = epoch_label.cpu().data.numpy()[ind_rand]
+            # epoch_label = epoch_label.cpu().data.numpy()[ind_rand]
             # epoch_label = epoch_label.cpu().data.numpy()
             # tsne = TSNE(n_components=2).fit_transform(
             #     epoch_feature.cpu().data.numpy()[ind_rand]
@@ -207,10 +207,6 @@ def main(args):
         data["y_test"] = y_test
         with open(os.path.join(args.output, "data.json"), "w") as f:
             json.dump(data, f, indent=4)
-
-    print("##Label")
-    print("|-- Yes: ", label.count(1))
-    print("|-- No : ", label.count(0))
 
     # Define Model
     net = ContrastiveResnetModel(out_dim=args.n_cls)
