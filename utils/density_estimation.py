@@ -25,20 +25,26 @@ def compute_covar_mean(args, emb, labels):
     return cov_class, mean_class
 
 
-def density_score(args, emb, cov, mean, device):
+def density_score(args, emb, cov, mean, device, inv=False, norm=False):
     score_classes = np.array([])
     for ind, (cov_, mean_) in enumerate(zip(cov, mean)):  # 各クラス毎に密度推定
         dif = torch.unsqueeze((emb - mean_), 0)
-        cov_ = torch.diag(torch.diagonal(cov_))
-        eps = 1e-10
-        cov_inv = torch.diag(1 / (torch.diagonal(cov_) + eps))
+        if inv:
+            cov_inv = torch.inverse(cov_)
+        else:
+            cov_ = torch.diag(torch.diagonal(cov_))
+            eps = 1e-10
+            cov_inv = torch.diag(1 / (torch.diagonal(cov_) + eps))
 
         tmp = torch.matmul(dif, cov_inv)
         left = torch.matmul(tmp, torch.t(dif))
-        # right = torch.log(
-        #     torch.pow(2 * torch.from_numpy(np.pi), cov_.size()[0]) * torch.det(cov_)
-        # )
-        score_class = -left.cpu().data.numpy()
+        right = torch.log(
+            torch.pow(2 * torch.from_numpy(np.pi), cov_.size()[0]) * torch.det(cov_)
+        )
+        if norm:
+            score_classes = -left.cpu().data.numpy() - right.cpu().data.numpy()
+        else:
+            score_class = -left.cpu().data.numpy()
         score_classes = np.append(score_classes, score_class)
 
     return np.argmax(score_classes), np.max(score_classes)

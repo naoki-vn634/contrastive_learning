@@ -6,6 +6,7 @@ import random
 import sys
 from distutils.util import strtobool
 from glob import glob
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -71,9 +72,10 @@ def trainer(
     for epoch in range(args.epoch):
         print("Epoch:{}/{}".format(epoch + 1, args.epoch))
         print("-----------")
-        scheduler.step()
+        # scheduler.step()
 
         for phase in phase_list:
+            bar = tqdm(total=len(dataloaders_dict[phase].dataset))
             if (phase == "train") and (epoch == 0):
                 continue
             if (phase == "test") and (epoch % 5 != 0):
@@ -84,10 +86,14 @@ def trainer(
 
             if phase == "train":
                 net.train()
+                torch.set_grad_enabled(True)
             else:
                 net.eval()
+                torch.set_grad_enabled(False)
 
             for i, (img0, img1, labels) in enumerate(dataloaders_dict[phase]):
+
+                bar.update(img0.size(0))
                 if phase == "train":
                     tblogger.add_images(f"{epoch}/crop_flip", img0[:8])
                     tblogger.add_images(f"{epoch}/colorjitter", img1[:8])
@@ -95,36 +101,39 @@ def trainer(
                 img01 = torch.cat([img0, img1], axis=0).to(device)
                 labels = labels.to(device)
 
-                with torch.set_grad_enabled(phase == "train"):
-                    out, middle = net(img01)
+                out, middle = net(img01)
+                out0, out1 = torch.split(out, img0.size()[0], dim=0)
+                L_con, L_cls = 0, 0
+
+                if args.train_mode != 2:
+                    L_con = ContrastiveLoss(out0, out1)
+                if args.train_mode != 0:
+                    out = net.fc3(middle)
                     out0, out1 = torch.split(out, img0.size()[0], dim=0)
-                    L_con, L_cls = 0, 0
 
-                    if args.train_mode != 2:
-                        L_con = ContrastiveLoss(out0, out1)
-                    if args.train_mode != 0:
-                        out = net.fc3(middle)
-                        out0, out1 = torch.split(out, img0.size()[0], dim=0)
+                    for out_ in [out0, out1]:
+                        L_cls += args.alpha * criterion(out_, labels)
+                        _, preds = torch.max(out_, 1)
+                        epoch_correct += torch.sum(preds == labels.data)
 
-                        for out_ in [out0, out1]:
-                            L_cls += args.alpha * criterion(out_, labels)
-                            _, preds = torch.max(out_, 1)
-                            epoch_correct += torch.sum(preds == labels.data)
+                loss = L_con + L_cls
 
-                    loss = L_con + L_cls
-
-                    if phase == "train":
-                        loss.backward()
-                        optimizer.step()
-                    epoch_loss += float(loss.item()) * img0.size(0)
+                if phase == "train":
+                    loss.backward()
+                    optimizer.step()
+                epoch_loss += float(loss.item()) * img0.size(0)
+                if args.train_mode != 2:
                     epoch_con += float(L_con.item()) * img0.size(0)
+                if args.train_mode != 0:
                     epoch_cls += float(L_cls.item()) * img0.size(0)
-
             epoch_loss = epoch_loss / len(dataloaders_dict[phase].dataset)
-            epoch_con = epoch_con / len(dataloaders_dict[phase].dataset)
-            epoch_cls = epoch_cls / len(dataloaders_dict[phase].dataset)
 
-            if args.train_mode == 1:
+            if args.train_mode != 2:
+                epoch_con = epoch_con / len(dataloaders_dict[phase].dataset)
+            if args.train_mode != 0:
+                epoch_cls = epoch_cls / len(dataloaders_dict[phase].dataset)
+
+            if args.train_mode != 0:
                 epoch_correct = epoch_correct.double() / (
                     len(dataloaders_dict[phase].dataset) * 2
                 )
@@ -137,17 +146,19 @@ def trainer(
             else:
                 print("Acc:{:.4f} ".format(epoch_correct))
                 print("Loss: {:.4f}".format(epoch_loss))
-                print("|-L_con: {:.4f}".format(epoch_con))
-                print("|-L_cls: {:.4f}".format(epoch_cls))
+                if args.train_mode != 2:
+                    print("|-L_con: {:.4f}".format(epoch_con))
+                if args.train_mode != 0:
+                    print("|-L_cls: {:.4f}".format(epoch_cls))
 
             if tfboard:
                 tblogger.add_scalar(f"{phase}/Loss", epoch_loss, epoch)
                 if args.train_mode == 1:
                     tblogger.add_scalar(f"{phase}/Acc", epoch_correct, epoch)
 
-            ind_rand = np.random.randint(
-                0, len(dataloaders_dict[phase].dataset), size=600
-            )
+            # ind_rand = np.random.randint(
+            #     0, len(dataloaders_dict[phase].dataset), size=600
+            # )
 
             # epoch_label = epoch_label.cpu().data.numpy()[ind_rand]
             # epoch_label = epoch_label.cpu().data.numpy()
@@ -193,8 +204,10 @@ def main(args):
             if os.path.basename(img_dir) == "garbage":
                 continue
             paths = sorted(glob(os.path.join(img_dir, "*")))
-            img_path.extend(paths)
-            for i in range(len(paths)):
+            random.shuffle(paths)
+            ext_path = paths[:5000]
+            img_path.extend(ext_path)
+            for i in range(len(ext_path)):
                 label.append(classes.index(os.path.basename(img_dir)))
 
         data = dict()
@@ -211,7 +224,7 @@ def main(args):
     # Define Model
     net = ContrastiveResnetModel(out_dim=args.n_cls)
     net.to(device)
-    if args.train_mode == 2:
+    if args.train_mode == 1:
         net.load_state_dict(torch.load(args.weight))
 
     transforms = ImageTransform(batchsize=args.batchsize)
@@ -220,12 +233,12 @@ def main(args):
 
     train_dataset = ImageDataset(x_train, y_train, transform=transforms, phase="train")
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batchsize, num_workers=1, shuffle=True
+        train_dataset, batch_size=args.batchsize, num_workers=40, shuffle=True
     )
 
     test_dataset = ImageDataset(x_test, y_test, transform=transforms, phase="train")
     test_dataloader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
+        test_dataset, batch_size=args.batchsize, num_workers=40, shuffle=False
     )
     print("## Dataset")
     print("|-- Train_Length: ", len(train_dataloader.dataset))
@@ -240,9 +253,10 @@ def main(args):
             net.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-6
         )
 
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=20, eta_min=0.0001
-    )
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(
+    #     optimizer, T_max=20, eta_min=0.0001
+    # )
+    scheduler = None
     criterion = nn.CrossEntropyLoss()
 
     trainer(

@@ -3,10 +3,13 @@ import torch.nn as nn
 
 
 def cosine_matrix(out0, out1):
-    # out_size : (batch * 2208)
+    # out_size : (batch * 2048)
     dot = torch.matmul(out0, torch.t(out1))
-    norm = torch.matmul(torch.norm(out0, dim=1), torch.norm(out1, dim=1))
-
+    norm = torch.matmul(
+        torch.norm(out0, dim=1).unsqueeze(-1), torch.norm(out1, dim=1).unsqueeze(0)
+    )
+    # print("dot", dot.size())
+    # print("norm", norm.size())
     return dot / norm
 
 

@@ -1,3 +1,4 @@
+import argparse
 import os
 import torch
 import json
@@ -61,13 +62,15 @@ def save_id_ood(
     plt.savefig(os.path.join(args.output, "id_ood_embedding.png"))
 
 
-def embedder(dataloader, net):
+def embedder(dataloader, net, device):
     for ind, (image, label) in enumerate(dataloader):
+        image = image.to(device)
+        label = label.to(device)
         _, emb = net(image)
         embedding = (
             emb.cpu().data.numpy()
             if ind == 0
-            else np.concatenate([embedding.emb.cpu().data.numpy()], axis=0)
+            else np.concatenate([embedding, emb.cpu().data.numpy()], axis=0)
         )
         labels = (
             label.cpu().data.numpy()
@@ -83,8 +86,8 @@ def main(args):
 
     with open(os.path.join(args.input, "data.json")) as f:
         data = json.load(f)
-        x_train, x_test = data["x_train"][:1000], data["x_test"][:1000]
-        y_train, y_test = data["y_train"][:1000], data["y_test"][:1000]
+        x_train, x_test = data["x_train"], data["x_test"]
+        y_train, y_test = data["y_train"], data["y_test"]
 
     ood_img = glob("/mnt/aoni02/matsunaga/ImageNet/cow_resemble/*/*.jpg")
     ood_label = [2 for _ in range(len(ood_img))]
@@ -105,13 +108,15 @@ def main(args):
     )
 
     val_dataset = ImageDataset(ood_img, ood_label, transform=transforms, phase="val")
-    test_dataloader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=args.batchsize, num_workers=40, shuffle=False
+    val_dataloader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=args.batchsize, num_workers=40, shuffle=False
     )
-    train_emb, train_label = embedder(train_dataloader, net)
-    test_emb, test_label = embedder(test_dataloader, net)
-    val_emb, val_label = embedder(val_dataloader, net)
+    print("embedding")
+    train_emb, train_label = embedder(train_dataloader, net, device)
+    test_emb, test_label = embedder(test_dataloader, net, device)
+    val_emb, val_label = embedder(val_dataloader, net, device)
     all_emb = np.concatenate([train_emb, test_emb, val_emb], axis=0)
+    print("tsne")
     tsne = TSNE(n_components=2).fit_transform(all_emb)
     tsne_train = tsne[: len(train_label)]
     tsne_test = tsne[len(train_label) : len(train_label) + len(test_label)]
