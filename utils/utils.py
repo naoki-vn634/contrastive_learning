@@ -34,14 +34,16 @@ def density_score(args, emb, cov, mean, device, inv=False, norm=False):
         else:
             cov_ = torch.diag(torch.diagonal(cov_))
             eps = 1e-10
+
             cov_inv = torch.diag(1 / (torch.diagonal(cov_) + eps))
 
         tmp = torch.matmul(dif, cov_inv)
         left = torch.matmul(tmp, torch.t(dif))
-        right = torch.log(
-            torch.pow(2 * torch.from_numpy(np.pi), cov_.size()[0]) * torch.det(cov_)
-        )
+
         if norm:
+            right = torch.log(
+                torch.pow(2 * torch.from_numpy(np.pi), cov_.size()[0]) * torch.det(cov_)
+            )
             score_classes = -left.cpu().data.numpy() - right.cpu().data.numpy()
         else:
             score_class = -left.cpu().data.numpy()

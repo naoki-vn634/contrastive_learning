@@ -13,6 +13,7 @@ class ContrastiveResnetModel(nn.Module):
         self.bn = nn.BatchNorm1d(hidden_size)
         self.fc2 = nn.Linear(hidden_size, 128)
         self.fc3 = nn.Linear(hidden_size, out_dim)
+        self.fc4 = nn.Linear(128, out_dim)
 
     def forward(self, x):
         hidden = self.resnet(x).view(x.size()[0], -1)

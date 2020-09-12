@@ -8,8 +8,6 @@ def cosine_matrix(out0, out1):
     norm = torch.matmul(
         torch.norm(out0, dim=1).unsqueeze(-1), torch.norm(out1, dim=1).unsqueeze(0)
     )
-    # print("dot", dot.size())
-    # print("norm", norm.size())
     return dot / norm
 
 
@@ -34,4 +32,5 @@ def ContrastiveLoss(out0, out1, t=2.0):
     loss = torch.log(negative_1 * negative_0) - torch.log(positives * positives)
 
     loss = torch.mean(loss)
+
     return loss

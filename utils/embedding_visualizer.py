@@ -34,7 +34,7 @@ def save_id_ood(
             label="train",
             marker="*",
             color=cm.colors[i],
-            alpha=0.5,
+            alpha=0.2,
         )
         plt.scatter(
             emb_test[:, 0],
@@ -42,10 +42,10 @@ def save_id_ood(
             label="test",
             marker="o",
             color=cm.colors[i],
-            alpha=0.5,
+            alpha=0.2,
         )
     plt.scatter(
-        tsne_val[:, 0], tsne_val[:, 1], label="ood", color="blue", marker="v", alpha=0.4
+        tsne_val[:, 0], tsne_val[:, 1], label="ood", color="blue", marker="v", alpha=0.2
     )
     train_marker = mlines.Line2D(
         [], [], marker="*", linestyle=None, markersize=10, label="train"

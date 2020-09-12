@@ -108,7 +108,10 @@ def trainer(
                 if args.train_mode != 2:
                     L_con = ContrastiveLoss(out0, out1)
                 if args.train_mode != 0:
-                    out = net.fc3(middle)
+                    if args.hidden == 0:
+                        out = net.fc3(middle)
+                    elif args.hidden == 1:
+                        out = net.fc4(out)
                     out0, out1 = torch.split(out, img0.size()[0], dim=0)
 
                     for out_ in [out0, out1]:
@@ -176,7 +179,7 @@ def trainer(
                     net.state_dict(),
                     os.path.join(weight_save_dir, f"{epoch}_weight.pth"),
                 )
-            save_epoch = [1, 3, 5, 10, 20, 50, 70, 90]
+            save_epoch = [1, 3, 5, 7, 10, 15, 20, 30, 40, 50, 60, 70, 90]
             if epoch in save_epoch:
                 torch.save(
                     net.state_dict(),
@@ -280,6 +283,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input", type=str, default="/mnt/aoni02/matsunaga/200313_global-model/train"
     )
+    parser.add_argument("--hidden", type=int, help="0:2048, 1:128")
     parser.add_argument("--epoch", type=int, default=20)
     parser.add_argument("--weight", type=str)
     parser.add_argument("--batchsize", type=int, default=128)
