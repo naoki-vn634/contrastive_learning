@@ -3,7 +3,7 @@ import torchvision.models as models
 
 
 class ContrastiveResnetModel(nn.Module):
-    def __init__(self, mode=0, num_channels=3, hidden_size=2048, out_dim=2):
+    def __init__(self, mode=0, num_channels=3, hidden_size=2048, out_dim=2, hidden=0):
         super(ContrastiveResnetModel, self).__init__()
         resnet = models.resnet50(pretrained=False)
         self.mode = mode
@@ -13,7 +13,8 @@ class ContrastiveResnetModel(nn.Module):
         self.bn = nn.BatchNorm1d(hidden_size)
         self.fc2 = nn.Linear(hidden_size, 128)
         self.fc3 = nn.Linear(hidden_size, out_dim)
-        self.fc4 = nn.Linear(128, out_dim)
+        if not hidden == 0:
+            self.fc4 = nn.Linear(128, out_dim)
 
     def forward(self, x):
         hidden = self.resnet(x).view(x.size()[0], -1)

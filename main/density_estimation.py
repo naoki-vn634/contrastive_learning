@@ -28,18 +28,19 @@ from model import ContrastiveResnetModel
 
 
 def save_score(args, label_dict, score_dict):
-    phase_list = ["train", "test", "val"]
+    phase_list = ["train", "test", "val", "ood"]
     plt.figure()
     for phase in phase_list:
         # print(np.max(score_dict[phase]))
-        sns.distplot(score_dict[phase], label=phase)
-    plt.xlim([-10000, 0])
+        sns.distplot(score_dict[phase], label=phase, hist=False)
+    if args.hidden == 0:
+        plt.xlim([-10000, 0])
     plt.legend()
     plt.savefig(os.path.join(args.output, "score.png"))
 
 
 def evaluate(args, net, dataloaders_dict, device):
-    phase_list = ["train", "test", "val"]
+    phase_list = ["train", "test", "val", "ood"]
     torch.backends.cudnn.benchmark = True
     label_dict = dict()
     score_dict = dict()
@@ -55,7 +56,10 @@ def evaluate(args, net, dataloaders_dict, device):
             out, middle = net(image)
             pos = nn.functional.softmax(net.fc3(middle), dim=1)
 
-            features = middle if i == 0 else torch.cat([features, middle], dim=0)
+            if args.hidden == 0:
+                features = middle if i == 0 else torch.cat([features, middle], dim=0)
+            elif args.hidden == 1:
+                features = out if i == 0 else torch.cat([features, out], dim=0)
             labels = label if i == 0 else torch.cat([labels, label], dim=0)
             poses = pos if i == 0 else torch.cat([poses, pos], dim=0)
 
@@ -98,12 +102,15 @@ def main(args):
     y_train = data["y_train"]
     y_test = data["y_test"]
 
+    val_path = glob("/mnt/aoni02/matsunaga/10_cropped-images/all_id/*/*.jpg")
+    val_label = [2 for _ in range(len(val_path))]
+
     ood_path = glob(os.path.join(args.ood, "*/*.jpg"))
-    ood_label = [4 for _ in range(len(ood_path))]
+    ood_label = [3 for _ in range(len(ood_path))]
 
     transforms = ImageTransform(batchsize=args.batchsize)
 
-    net = ContrastiveResnetModel(out_dim=args.n_cls)
+    net = ContrastiveResnetModel(out_dim=args.n_cls, hidden=args.hidden)
     net.to(device)
     net.load_state_dict(torch.load(args.weight))
 
@@ -117,15 +124,21 @@ def main(args):
         test_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
     )
 
-    val_dataset = ImageDataset(ood_path, ood_label, transform=transforms, phase="val")
+    val_dataset = ImageDataset(val_path, val_label, transform=transforms, phase="val")
     val_dataloader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
+    )
+
+    ood_dataset = ImageDataset(ood_path, ood_label, transform=transforms, phase="val")
+    ood_dataloader = torch.utils.data.DataLoader(
+        ood_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
     )
 
     dataloaders_dict = {
         "train": train_dataloader,
         "test": test_dataloader,
         "val": val_dataloader,
+        "ood": ood_dataloader,
     }
 
     evaluate(args, net, dataloaders_dict, device=device)
@@ -136,10 +149,14 @@ if __name__ == "__main__":
     parser.add_argument("--id", type=str)
     parser.add_argument("--ood", type=str)
     parser.add_argument("--weight", type=str)
+    parser.add_argument("--hidden", type=int, help="0:2048, 1:128")
     parser.add_argument("--batchsize", type=int, default=128)
     parser.add_argument("--output", type=str)
-    parser.add_argument("--n_cls", type=int)
-    parser.add_argument("--gpuid", type=str)
+    parser.add_argument("--n_cls", type=int, default=2)
+    parser.add_argument(
+        "--gpuid",
+        type=str,
+    )
 
     args = parser.parse_args()
     if not os.path.exists(args.output):

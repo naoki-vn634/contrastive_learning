@@ -225,7 +225,7 @@ def main(args):
             json.dump(data, f, indent=4)
 
     # Define Model
-    net = ContrastiveResnetModel(out_dim=args.n_cls)
+    net = ContrastiveResnetModel(out_dim=args.n_cls, hidden=args.hidden)
     net.to(device)
     if args.train_mode == 1:
         net.load_state_dict(torch.load(args.weight))
