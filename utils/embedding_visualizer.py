@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
+from distutils.util import strtobool
 from glob import glob
 from sklearn.manifold import TSNE
 
@@ -116,21 +117,22 @@ def main(args):
     test_emb, test_label = embedder(test_dataloader, net, device)
     val_emb, val_label = embedder(val_dataloader, net, device)
     all_emb = np.concatenate([train_emb, test_emb, val_emb], axis=0)
+    if args.tsne:
     print("tsne")
-    tsne = TSNE(n_components=2).fit_transform(all_emb)
-    tsne_train = tsne[: len(train_label)]
-    tsne_test = tsne[len(train_label) : len(train_label) + len(test_label)]
-    tsne_val = tsne[
-        len(train_label)
-        + len(test_label) : len(train_label)
-        + len(test_label)
-        + len(val_label)
-    ]
+        tsne = TSNE(n_components=2).fit_transform(all_emb)
+        tsne_train = tsne[: len(train_label)]
+        tsne_test = tsne[len(train_label) : len(train_label) + len(test_label)]
+        tsne_val = tsne[
+            len(train_label)
+            + len(test_label) : len(train_label)
+            + len(test_label)
+            + len(val_label)
+        ]
 
-    save_id_ood(
-        args, tsne_train, tsne_test, tsne_val, train_label, test_label, val_label
-    )
-
+        save_id_ood(
+            args, tsne_train, tsne_test, tsne_val, train_label, test_label, val_label
+        )
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -140,6 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str)
     parser.add_argument("--n_cls", type=int)
     parser.add_argument("--gpuid", type=str)
+    parser.add_argument('--tsne', type=strtobool)
     args = parser.parse_args()
 
     if not os.path.exists(args.output):

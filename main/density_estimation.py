@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import random
 import sys
 from distutils.util import strtobool
 from glob import glob
@@ -25,6 +24,15 @@ from loss_func import ContrastiveLoss
 
 sys.path.append("../models/")
 from model import ContrastiveResnetModel
+
+
+def get_ood_rank(x, test_score):
+    ind = np.where(test_score > x)[0]
+    if not len(ind) == 0:
+        ood_rank = len(test_score) - ind[0]
+    else:
+        ood_rank = 0
+    return ood_rank
 
 
 def save_score(args, label_dict, score_dict):
@@ -85,11 +93,13 @@ def evaluate(args, net, dataloaders_dict, device):
 
     save_score(args, label_dict, score_dict)
 
+    return score_dict, label_dict
+
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("#device: ", device)
-
+    phase_list = ["test", "val", "ood"]
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
@@ -141,7 +151,19 @@ def main(args):
         "ood": ood_dataloader,
     }
 
-    evaluate(args, net, dataloaders_dict, device=device)
+    ood_rank = dict()
+    score_dict, label_dict = evaluate(args, net, dataloaders_dict, device=device)
+    for phase in phase_list:
+        if phase == "test":
+            test_score = score_dict[phase]
+            test_score.sort()
+
+        ood_rank[phase] = np.mean(
+            [get_ood_rank(x, test_score) for x in score_dict[phase]]
+        )
+    with open(os.path.join(args.output, "ood_rank.json"), "w") as f:
+        d = json.dump(ood_rank)
+        f.write(d)
 
 
 if __name__ == "__main__":
