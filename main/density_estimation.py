@@ -32,6 +32,7 @@ def get_ood_rank(x, test_score):
         ood_rank = len(test_score) - ind[0]
     else:
         ood_rank = 0
+    ood_rank /= len(test_score)
     return ood_rank
 
 
@@ -158,11 +159,12 @@ def main(args):
             test_score = score_dict[phase]
             test_score.sort()
 
-        ood_rank[phase] = np.mean(
+        ood_rank[phase] = 1 - np.mean(
             [get_ood_rank(x, test_score) for x in score_dict[phase]]
         )
+        print(ood_rank)
     with open(os.path.join(args.output, "ood_rank.json"), "w") as f:
-        d = json.dump(ood_rank)
+        d = json.dumps(ood_rank)
         f.write(d)
 
 

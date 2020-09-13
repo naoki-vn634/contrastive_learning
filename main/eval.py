@@ -30,7 +30,7 @@ def main(args):
 
     transforms = ImageTransform(batchsize=args.batchsize)
     val_dataset = ImageDataset(val_path, label, transform=transforms, phase="val")
-    val_dataloader = torch.utils.data.Dataloader(
+    val_dataloader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batchsize, num_workers=40, shuffle=False
     )
 
@@ -57,6 +57,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight", type=str)
     parser.add_argument("--batchsize", type=int)
     parser.add_argument("--n_cls", type=int)
+    parser.add_argument("--output")
 
     args = parser.parse_args()
     main(args)
