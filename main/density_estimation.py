@@ -4,6 +4,7 @@ import os
 import sys
 from distutils.util import strtobool
 from glob import glob
+from math import log2
 
 import cv2
 import matplotlib.pyplot as plt
@@ -26,6 +27,14 @@ sys.path.append("../models/")
 from model import ContrastiveResnetModel
 
 
+def calculate_entropy(pos):
+    entropy = np.array([])
+    
+    for posterior in pos:
+        ent = -sum([x*log2(x) if x != 0 else 0 for x in posterior])
+        entropy = np.append(entropy,ent)    
+    return entropy
+
 def get_ood_rank(x, test_score):
     ind = np.where(test_score > x)[0]
     if not len(ind) == 0:
@@ -43,7 +52,7 @@ def save_score(args, label_dict, score_dict):
         # print(np.max(score_dict[phase]))
         sns.distplot(score_dict[phase], label=phase, hist=False)
     if args.hidden == 0:
-        plt.xlim([-10000, 0])
+        plt.xlim([-20000, 0])
     plt.legend()
     plt.savefig(os.path.join(args.output, "score.png"))
 
@@ -65,14 +74,26 @@ def evaluate(args, net, dataloaders_dict, device):
             out, middle = net(image)
             pos = nn.functional.softmax(net.fc3(middle), dim=1)
 
+
             if args.hidden == 0:
                 features = middle if i == 0 else torch.cat([features, middle], dim=0)
             elif args.hidden == 1:
                 features = out if i == 0 else torch.cat([features, out], dim=0)
             labels = label if i == 0 else torch.cat([labels, label], dim=0)
             poses = pos if i == 0 else torch.cat([poses, pos], dim=0)
+        _,preds = torch.max(poses, 1)
 
         if phase == "train":
+            # preds_np = preds.cpu().data.numpy()
+            # labels_np = labels.cpu().data.numpy()
+            # features_np = features.cpu().data.numpy()
+            # poses_np = poses.cpu().data.numpy()
+            # ent_np = calculate_entropy(poses_np)
+            # print(len(features_np))
+            # features_ex = torch.from_numpy(features_np[np.where((labels_np == preds_np) & (ent_np < 0.01))[0]]).to(device)
+            # labels_ex = torch.from_numpy(labels_np[np.where((labels_np == preds_np) & (ent_np < 0.01))[0]]).to(device)
+            # print(len(features_ex))
+            # cov_class, mean_class = compute_covar_mean(args, features_ex, labels_ex)
             cov_class, mean_class = compute_covar_mean(args, features, labels)
 
         ind, score, posterior = np.array([]), np.array([]), np.array([])
@@ -151,6 +172,10 @@ def main(args):
         "val": val_dataloader,
         "ood": ood_dataloader,
     }
+    print('train: ',len(train_dataloader.dataset))
+    print('test: ',len(test_dataloader.dataset))
+    print('val: ',len(val_dataloader.dataset))
+    print('ood: ',len(ood_dataloader.dataset))
 
     ood_rank = dict()
     score_dict, label_dict = evaluate(args, net, dataloaders_dict, device=device)

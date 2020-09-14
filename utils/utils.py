@@ -39,7 +39,6 @@ def density_score(args, emb, cov, mean, device, inv=False, norm=False):
 
         tmp = torch.matmul(dif, cov_inv)
         left = torch.matmul(tmp, torch.t(dif))
-
         if norm:
             right = torch.log(
                 torch.pow(2 * torch.from_numpy(np.pi), cov_.size()[0]) * torch.det(cov_)

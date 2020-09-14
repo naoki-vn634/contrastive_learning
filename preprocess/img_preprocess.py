@@ -3,12 +3,13 @@ from PIL import Image
 
 
 class ImageTransform(object):
-    def __init__(self, batchsize, s=1.0, size=224):
+    def __init__(self, batchsize, s=1.0, size=224, crop_rate=0.8):
         self.s = s
         self.transform = {
             "augment0": transforms.Compose(
                 [
-                    transforms.RandomResizedCrop(size=200, scale=(0.8, 1.0)),
+                    # transforms.RandomResizedCrop(size=224, scale=(0.8, 1.0)),
+                    transforms.RandomResizedCrop(size=224, scale=(crop_rate, 1.0)),
                     transforms.RandomHorizontalFlip(),
                     transforms.Resize(size),
                     transforms.ToTensor(),

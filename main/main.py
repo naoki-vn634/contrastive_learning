@@ -103,21 +103,31 @@ def trainer(
 
                 out, middle = net(img01)
                 out0, out1 = torch.split(out, img0.size()[0], dim=0)
+                middle0, middle1 = torch.split(middle, img0.size()[0], dim=0)
                 L_con, L_cls = 0, 0
 
                 if args.train_mode != 2:
                     L_con = ContrastiveLoss(out0, out1)
                 if args.train_mode != 0:
-                    if args.hidden == 0:
-                        out = net.fc3(middle)
-                    elif args.hidden == 1:
-                        out = net.fc4(out)
-                    out0, out1 = torch.split(out, img0.size()[0], dim=0)
-
-                    for out_ in [out0, out1]:
-                        L_cls += args.alpha * criterion(out_, labels)
-                        _, preds = torch.max(out_, 1)
+                    if args.cls_head_one:
+                        if args.hidden == 0:
+                            out = net.fc3(middle0)
+                        elif args.hidden == 1:
+                            out = net.fc4(out0)
+                        L_cls = args.alpha * criterion(out, labels)
+                        _, preds = torch.max(out, 1)
                         epoch_correct += torch.sum(preds == labels.data)
+                    else:
+                        if args.hidden == 0:
+                            out = net.fc3(middle)
+                        elif args.hidden == 1:
+                            out = net.fc4(out)
+                        out0, out1 = torch.split(out, img0.size()[0], dim=0)
+
+                        for out_ in [out0, out1]:
+                            L_cls += args.alpha * criterion(out_, labels)
+                            _, preds = torch.max(out_, 1)
+                            epoch_correct += torch.sum(preds == labels.data)
 
                 loss = L_con + L_cls
 
@@ -137,8 +147,10 @@ def trainer(
                 epoch_cls = epoch_cls / len(dataloaders_dict[phase].dataset)
 
             if args.train_mode != 0:
+                len_num = 1 if args.cls_head_one else 2
+                print(len_num)
                 epoch_correct = epoch_correct.double() / (
-                    len(dataloaders_dict[phase].dataset) * 2
+                    len(dataloaders_dict[phase].dataset) * len_num
                 )
 
             Loss[phase][epoch] = epoch_loss
@@ -159,22 +171,7 @@ def trainer(
                 if args.train_mode == 1:
                     tblogger.add_scalar(f"{phase}/Acc", epoch_correct, epoch)
 
-            # ind_rand = np.random.randint(
-            #     0, len(dataloaders_dict[phase].dataset), size=600
-            # )
-
-            # epoch_label = epoch_label.cpu().data.numpy()[ind_rand]
-            # epoch_label = epoch_label.cpu().data.numpy()
-            # tsne = TSNE(n_components=2).fit_transform(
-            #     epoch_feature.cpu().data.numpy()[ind_rand]
-            # )
-            # emb_0 = tsne[np.where(epoch_label == 0)[0]]
-            # emb_1 = tsne[np.where(epoch_label == 1)[0]]
-            # emb_2 = tsne[np.where(epoch_label == 2)[0]]
-            # save_embedding(
-            #     args, emb_0, emb_1, emb_2, tblogger, epoch, phase, emb_save_dir
-            # )
-            if epoch % args.checkpoint_iter == 0:
+            if (epoch + 1) % args.checkpoint_iter == 0:
                 torch.save(
                     net.state_dict(),
                     os.path.join(weight_save_dir, f"{epoch}_weight.pth"),
@@ -185,13 +182,14 @@ def trainer(
                     net.state_dict(),
                     os.path.join(weight_save_dir, f"{epoch}_weight.pth"),
                 )
+    tblogger.close()
 
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("#device: ", device)
 
-    if args.train_mode == 1:
+    if args.train_mode == 0 or 1:
         with open(os.path.join(args.input, "data.json")) as f:
             data = json.load(f)
             x_train, x_test = data["x_train"], data["x_test"]
@@ -230,7 +228,7 @@ def main(args):
     if args.train_mode == 1:
         net.load_state_dict(torch.load(args.weight))
 
-    transforms = ImageTransform(batchsize=args.batchsize)
+    transforms = ImageTransform(batchsize=args.batchsize, crop_rate=args.crop_rate)
     for name, param in net.named_parameters():
         param.require_grad = True
 
@@ -283,18 +281,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input", type=str, default="/mnt/aoni02/matsunaga/200313_global-model/train"
     )
-    parser.add_argument("--hidden", type=int, help="0:2048, 1:128")
+    parser.add_argument("--hidden", type=int, help="0:2048, 1:128", default=0)
     parser.add_argument("--epoch", type=int, default=20)
     parser.add_argument("--weight", type=str)
     parser.add_argument("--batchsize", type=int, default=128)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--tfboard", type=strtobool)
     parser.add_argument("--output", type=str)
-    parser.add_argument("--n_cls", type=int)
-    parser.add_argument("--gpuid", type=str)
+    parser.add_argument("--n_cls", type=int, default=2)
+    parser.add_argument("--gpuid", type=str, default='0')
     parser.add_argument("--checkpoint_iter", type=int, default=10)
     parser.add_argument("--alpha", type=int, default=100)
     parser.add_argument("--optim", type=str)
+    parser.add_argument('--crop_rate', type=float)
+    parser.add_argument('--cls_head_one', type=strtobool)
 
     args = parser.parse_args()
 
