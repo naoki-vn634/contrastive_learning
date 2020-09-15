@@ -46,15 +46,32 @@ def get_ood_rank(x, test_score):
 
 
 def save_score(args, label_dict, score_dict):
-    phase_list = ["train", "test", "val", "ood"]
+    # phase_list = ["train", "test", "val", "ood"]
+    phase_list = ["test", "ood"]
     plt.figure()
     for phase in phase_list:
         # print(np.max(score_dict[phase]))
         sns.distplot(score_dict[phase], label=phase, hist=False)
+        print('max ', np.max(score_dict[phase]))
+        print('min ', np.min(score_dict[phase]))
     if args.hidden == 0:
-        plt.xlim([-20000, 0])
+        plt.xlim(left=-10000)
     plt.legend()
     plt.savefig(os.path.join(args.output, "score.png"))
+    plt.close()
+    
+    # plt.figure()
+    # plt.hist([score_dict['train'],
+    #           score_dict['test'],
+    #           score_dict['val'],
+    #           score_dict['ood']], label=phase_list)
+    # plt.legend()
+    # plt.savefig(os.path.join(args.output, 'score_dist.png'))
+    
+    # plt.close()
+
+    
+
 
 
 def evaluate(args, net, dataloaders_dict, device):

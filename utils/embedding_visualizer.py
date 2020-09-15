@@ -118,7 +118,7 @@ def main(args):
     val_emb, val_label = embedder(val_dataloader, net, device)
     all_emb = np.concatenate([train_emb, test_emb, val_emb], axis=0)
     if args.tsne:
-    print("tsne")
+        print("tsne")
         tsne = TSNE(n_components=2).fit_transform(all_emb)
         tsne_train = tsne[: len(train_label)]
         tsne_test = tsne[len(train_label) : len(train_label) + len(test_label)]
