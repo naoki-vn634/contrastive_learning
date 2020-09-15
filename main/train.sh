@@ -23,4 +23,4 @@ python -u main.py \
 --crop_rate 0.5 \
 --cls_head_one True \
 --checkpoint_iter 50 \
---weight "/mnt/aoni02/matsunaga/Contrastive/early_stage/pre_2048_crop/weight/100_weight.pth"
+--weight "/mnt/aoni02/matsunaga/Contrastive/early_stage/pre_2048_crop/weight/99_weight.pth"
