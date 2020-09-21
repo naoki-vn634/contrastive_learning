@@ -46,8 +46,8 @@ def get_ood_rank(x, test_score):
 
 
 def save_score(args, label_dict, score_dict):
-    # phase_list = ["train", "test", "val", "ood"]
-    phase_list = ["test", "ood"]
+    phase_list = ["train", "test", "val", 'garbage']
+    # phase_list = ["test", "ood"]
     plt.figure()
     for phase in phase_list:
         # print(np.max(score_dict[phase]))
@@ -57,25 +57,36 @@ def save_score(args, label_dict, score_dict):
     if args.hidden == 0:
         plt.xlim(left=-10000)
     plt.legend()
-    plt.savefig(os.path.join(args.output, "score.png"))
+    plt.savefig(os.path.join(args.output, "score_garbage.png"))
     plt.close()
     
-    # plt.figure()
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(20, 10))
+    id = ["train", "test", "val"]
+    ood = ['ood', "garbage"]
+    for phase in id:
+        sns.distplot(score_dict[phase]/10000, label=phase, hist=False, ax=ax1)
+    for phase in ood:
+        extract = score_dict[phase][np.where(score_dict[phase]/10000 > -200)[0]]
+        sns.distplot(extract/10000 , label=phase, hist=False, ax=ax2)
+    plt.xlabel('ood score s(x)')
+    # plt.xlim([-2 000000, 0])
+    plt.legend()
+
     # plt.hist([score_dict['train'],
     #           score_dict['test'],
     #           score_dict['val'],
     #           score_dict['ood']], label=phase_list)
     # plt.legend()
-    # plt.savefig(os.path.join(args.output, 'score_dist.png'))
-    
-    # plt.close()
+    fig.savefig(os.path.join(args.output, 'score_subplot.png'))
+    plt.close()
 
     
 
 
 
 def evaluate(args, net, dataloaders_dict, device):
-    phase_list = ["train", "test", "val", "ood"]
+    phase_list = ["train", "test", "val", "ood", 'garbage']
     torch.backends.cudnn.benchmark = True
     label_dict = dict()
     score_dict = dict()
@@ -157,6 +168,9 @@ def main(args):
     ood_path = glob(os.path.join(args.ood, "*/*.jpg"))
     ood_label = [3 for _ in range(len(ood_path))]
 
+    garbage_path = glob('/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*.png')
+    garbage_label = [4 for _ in range(len(garbage_path))]
+
     transforms = ImageTransform(batchsize=args.batchsize)
 
     net = ContrastiveResnetModel(out_dim=args.n_cls, hidden=args.hidden)
@@ -183,16 +197,23 @@ def main(args):
         ood_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
     )
 
+    garbage_dataset = ImageDataset(garbage_path, garbage_label, transform=transforms, phase="val")
+    garbage_dataloader = torch.utils.data.DataLoader(
+        garbage_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
+    )
+
     dataloaders_dict = {
         "train": train_dataloader,
         "test": test_dataloader,
         "val": val_dataloader,
         "ood": ood_dataloader,
+        "garbage": garbage_dataloader,
     }
     print('train: ',len(train_dataloader.dataset))
     print('test: ',len(test_dataloader.dataset))
     print('val: ',len(val_dataloader.dataset))
     print('ood: ',len(ood_dataloader.dataset))
+    print('garbage: ',len(garbage_dataloader.dataset))
 
     ood_rank = dict()
     score_dict, label_dict = evaluate(args, net, dataloaders_dict, device=device)

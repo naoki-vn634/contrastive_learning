@@ -174,7 +174,7 @@ def trainer(
             if (epoch + 1) % args.checkpoint_iter == 0:
                 torch.save(
                     net.state_dict(),
-                    os.path.join(weight_save_dir, f"{epoch}_weight.pth"),
+                    os.path.join(weight_save_dir, f"{epoch+1}_weight.pth"),
                 )
             save_epoch = [1, 3, 5, 7, 10, 15, 20, 30, 40, 50, 60, 70, 90]
             if epoch in save_epoch:
@@ -189,13 +189,14 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("#device: ", device)
 
-    if args.train_mode == 0 or 1:
+    if args.train_mode == 1:
         with open(os.path.join(args.input, "data.json")) as f:
             data = json.load(f)
             x_train, x_test = data["x_train"], data["x_test"]
             y_train, y_test = data["y_train"], data["y_test"]
 
     else:  # pretrain / only classification
+        print("DATASET INITIALIZE")
         img_path = []
         label = []
 
@@ -204,7 +205,7 @@ def main(args):
         for img_dir in img_dirs:
             if os.path.basename(img_dir) == "garbage":
                 continue
-            paths = sorted(glob(os.path.join(img_dir, "*")))
+            paths = sorted(glob(os.path.join(img_dir, 'higasimura', "*")))
             random.shuffle(paths)
             ext_path = paths[:5000]
             img_path.extend(ext_path)
