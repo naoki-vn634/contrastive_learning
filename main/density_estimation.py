@@ -29,11 +29,12 @@ from model import ContrastiveResnetModel
 
 def calculate_entropy(pos):
     entropy = np.array([])
-    
+
     for posterior in pos:
-        ent = -sum([x*log2(x) if x != 0 else 0 for x in posterior])
-        entropy = np.append(entropy,ent)    
+        ent = -sum([x * log2(x) if x != 0 else 0 for x in posterior])
+        entropy = np.append(entropy, ent)
     return entropy
+
 
 def get_ood_rank(x, test_score):
     ind = np.where(test_score > x)[0]
@@ -46,48 +47,44 @@ def get_ood_rank(x, test_score):
 
 
 def save_score(args, label_dict, score_dict, thu=-20000):
-    phase_list = ["train", "test", "val", 'garbage']
-    # phase_list = ["test", "ood"]
-    plt.figure()
-    for phase in phase_list:
-        # print(np.max(score_dict[phase]))
-        sns.distplot(score_dict[phase], label=phase, hist=False)
-        print('max ', np.max(score_dict[phase]))
-        print('min ', np.min(score_dict[phase]))
-    if args.hidden == 0:
-        plt.xlim([-10000, 0])
-    plt.legend()
-    plt.savefig(os.path.join(args.output, "score_garbage.png"))
-    plt.close()
-    
+    # phase_list = ["train", "test", "val", 'garbage']
+    # # phase_list = ["test", "ood"]
+    # plt.figure()
+    # for phase in phase_list:
+    #     # print(np.max(score_dict[phase]))
+    #     sns.distplot(score_dict[phase], label=phase, hist=False)
+    #     print('max ', np.max(score_dict[phase]))
+    #     print('min ', np.min(score_dict[phase]))
+    # if args.hidden == 0:
+    #     plt.xlim([-10000, 0])
+    # plt.legend()
+    # plt.savefig(os.path.join(args.output, "score_garbage.png"))
+    # plt.close()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(20, 10))
     ax1.set_xlim(thu, 0)
     ax2.set_xlim(thu, 0)
     id = ["train", "test", "val"]
-    ood = ['ood', "garbage"]
+    ood = ["ood", "garbage"]
     for phase in id:
         sns.distplot(score_dict[phase], label=phase, hist=True, ax=ax1, bins=100)
     for phase in ood:
-        print('raw: ', len(score_dict[phase]))
+        print("raw: ", len(score_dict[phase]))
         extract = score_dict[phase][np.where(score_dict[phase] > thu)[0]]
-        print('extracted: ', len(extract))
-        sns.distplot(extract , label=phase, hist=True, ax=ax2, bins=100)
-    ax1.set_xlabel('ood score s(x)')
-    ax2.set_xlabel('ood score s(x)')
-    fig.suptitle("ood score comparison", fontsize=16)
+        print("extracted: ", len(extract))
+        sns.distplot(extract, label=phase, hist=True, ax=ax2, bins=100)
+    ax1.set_xlabel("ood score s(x)")
+    ax2.set_xlabel("ood score s(x)")
+    fig.suptitle("ood score comparison (Epoch: {})".format(args.epoch), fontsize=16)
     ax1.legend()
     ax2.legend()
 
-    fig.savefig(os.path.join(args.output, 'score_subplot.png'))
+    fig.savefig(os.path.join(args.output, "score_subplot.png"))
     plt.close()
-
-    
-
 
 
 def evaluate(args, net, dataloaders_dict, device):
-    phase_list = ["train", "test", "val", "ood", 'garbage']
+    phase_list = ["train", "test", "val", "ood", "garbage"]
     torch.backends.cudnn.benchmark = True
     label_dict = dict()
     score_dict = dict()
@@ -103,14 +100,13 @@ def evaluate(args, net, dataloaders_dict, device):
             out, middle = net(image)
             pos = nn.functional.softmax(net.fc3(middle), dim=1)
 
-
             if args.hidden == 0:
                 features = middle if i == 0 else torch.cat([features, middle], dim=0)
             elif args.hidden == 1:
                 features = out if i == 0 else torch.cat([features, out], dim=0)
             labels = label if i == 0 else torch.cat([labels, label], dim=0)
             poses = pos if i == 0 else torch.cat([poses, pos], dim=0)
-        _,preds = torch.max(poses, 1)
+        _, preds = torch.max(poses, 1)
 
         if phase == "train":
             # preds_np = preds.cpu().data.numpy()
@@ -150,7 +146,7 @@ def evaluate(args, net, dataloaders_dict, device):
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("#device: ", device)
-    phase_list = ["test", "val", "ood", 'garbage']
+    phase_list = ["test", "val", "ood", "garbage"]
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
@@ -169,7 +165,9 @@ def main(args):
     ood_path = glob(os.path.join(args.ood, "*/*.jpg"))
     ood_label = [3 for _ in range(len(ood_path))]
 
-    garbage_path = glob('/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*')
+    garbage_path = glob(
+        "/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*"
+    )
     garbage_label = [4 for _ in range(len(garbage_path))]
 
     transforms = ImageTransform(batchsize=args.batchsize)
@@ -198,7 +196,9 @@ def main(args):
         ood_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
     )
 
-    garbage_dataset = ImageDataset(garbage_path, garbage_label, transform=transforms, phase="val")
+    garbage_dataset = ImageDataset(
+        garbage_path, garbage_label, transform=transforms, phase="val"
+    )
     garbage_dataloader = torch.utils.data.DataLoader(
         garbage_dataset, batch_size=args.batchsize, num_workers=1, shuffle=False
     )
@@ -210,11 +210,11 @@ def main(args):
         "ood": ood_dataloader,
         "garbage": garbage_dataloader,
     }
-    print('train: ',len(train_dataloader.dataset))
-    print('test: ',len(test_dataloader.dataset))
-    print('val: ',len(val_dataloader.dataset))
-    print('ood: ',len(ood_dataloader.dataset))
-    print('garbage: ',len(garbage_dataloader.dataset))
+    print("train: ", len(train_dataloader.dataset))
+    print("test: ", len(test_dataloader.dataset))
+    print("val: ", len(val_dataloader.dataset))
+    print("ood: ", len(ood_dataloader.dataset))
+    print("garbage: ", len(garbage_dataloader.dataset))
 
     ood_rank = dict()
     score_dict, label_dict = evaluate(args, net, dataloaders_dict, device=device)
@@ -234,6 +234,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--epoch", type=str)
     parser.add_argument("--id", type=str)
     parser.add_argument("--ood", type=str)
     parser.add_argument("--weight", type=str)

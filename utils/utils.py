@@ -34,7 +34,6 @@ def density_score(args, emb, cov, mean, device, inv=False, norm=False):
         else:
             cov_ = torch.diag(torch.diagonal(cov_))
             eps = 1e-10
-
             cov_inv = torch.diag(1 / (torch.diagonal(cov_) + eps))
 
         tmp = torch.matmul(dif, cov_inv)

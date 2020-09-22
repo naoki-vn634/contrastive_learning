@@ -205,7 +205,7 @@ def main(args):
         for img_dir in img_dirs:
             if os.path.basename(img_dir) == "garbage":
                 continue
-            paths = sorted(glob(os.path.join(img_dir, 'higasimura', "*")))
+            paths = sorted(glob(os.path.join(img_dir, "higasimura", "*")))
             random.shuffle(paths)
             ext_path = paths[:5000]
             img_path.extend(ext_path)
@@ -290,12 +290,12 @@ if __name__ == "__main__":
     parser.add_argument("--tfboard", type=strtobool)
     parser.add_argument("--output", type=str)
     parser.add_argument("--n_cls", type=int, default=2)
-    parser.add_argument("--gpuid", type=str, default='0')
+    parser.add_argument("--gpuid", type=str, default="0")
     parser.add_argument("--checkpoint_iter", type=int, default=10)
     parser.add_argument("--alpha", type=int, default=100)
     parser.add_argument("--optim", type=str)
-    parser.add_argument('--crop_rate', type=float)
-    parser.add_argument('--cls_head_one', type=strtobool)
+    parser.add_argument("--crop_rate", type=float)
+    parser.add_argument("--cls_head_one", type=strtobool)
 
     args = parser.parse_args()
 

@@ -132,7 +132,7 @@ def main(args):
         save_id_ood(
             args, tsne_train, tsne_test, tsne_val, train_label, test_label, val_label
         )
-    
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str)
     parser.add_argument("--n_cls", type=int)
     parser.add_argument("--gpuid", type=str)
-    parser.add_argument('--tsne', type=strtobool)
+    parser.add_argument("--tsne", type=strtobool)
     args = parser.parse_args()
 
     if not os.path.exists(args.output):
