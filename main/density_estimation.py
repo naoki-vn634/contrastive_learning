@@ -45,7 +45,7 @@ def get_ood_rank(x, test_score):
     return ood_rank
 
 
-def save_score(args, label_dict, score_dict):
+def save_score(args, label_dict, score_dict, thu=-20000):
     phase_list = ["train", "test", "val", 'garbage']
     # phase_list = ["test", "ood"]
     plt.figure()
@@ -55,29 +55,30 @@ def save_score(args, label_dict, score_dict):
         print('max ', np.max(score_dict[phase]))
         print('min ', np.min(score_dict[phase]))
     if args.hidden == 0:
-        plt.xlim(left=-10000)
+        plt.xlim([-10000, 0])
     plt.legend()
     plt.savefig(os.path.join(args.output, "score_garbage.png"))
     plt.close()
     
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(20, 10))
+    ax1.set_xlim(thu, 0)
+    ax2.set_xlim(thu, 0)
     id = ["train", "test", "val"]
     ood = ['ood', "garbage"]
     for phase in id:
-        sns.distplot(score_dict[phase]/10000, label=phase, hist=False, ax=ax1)
+        sns.distplot(score_dict[phase], label=phase, hist=True, ax=ax1, bins=100)
     for phase in ood:
-        extract = score_dict[phase][np.where(score_dict[phase]/10000 > -200)[0]]
-        sns.distplot(extract/10000 , label=phase, hist=False, ax=ax2)
-    plt.xlabel('ood score s(x)')
-    # plt.xlim([-2 000000, 0])
-    plt.legend()
+        print('raw: ', len(score_dict[phase]))
+        extract = score_dict[phase][np.where(score_dict[phase] > thu)[0]]
+        print('extracted: ', len(extract))
+        sns.distplot(extract , label=phase, hist=True, ax=ax2, bins=100)
+    ax1.set_xlabel('ood score s(x)')
+    ax2.set_xlabel('ood score s(x)')
+    fig.suptitle("ood score comparison", fontsize=16)
+    ax1.legend()
+    ax2.legend()
 
-    # plt.hist([score_dict['train'],
-    #           score_dict['test'],
-    #           score_dict['val'],
-    #           score_dict['ood']], label=phase_list)
-    # plt.legend()
     fig.savefig(os.path.join(args.output, 'score_subplot.png'))
     plt.close()
 
@@ -149,7 +150,7 @@ def evaluate(args, net, dataloaders_dict, device):
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("#device: ", device)
-    phase_list = ["test", "val", "ood"]
+    phase_list = ["test", "val", "ood", 'garbage']
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
@@ -168,7 +169,7 @@ def main(args):
     ood_path = glob(os.path.join(args.ood, "*/*.jpg"))
     ood_label = [3 for _ in range(len(ood_path))]
 
-    garbage_path = glob('/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*.png')
+    garbage_path = glob('/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*')
     garbage_label = [4 for _ in range(len(garbage_path))]
 
     transforms = ImageTransform(batchsize=args.batchsize)
