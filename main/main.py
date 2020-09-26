@@ -110,18 +110,18 @@ def trainer(
                     L_con = ContrastiveLoss(out0, out1)
                 if args.train_mode != 0:
                     if args.cls_head_one:
-                        if args.hidden == 0:
+                        if args.hidden == 0 or 1:
                             out = net.fc3(middle0)
-                        elif args.hidden == 1:
-                            out = net.fc4(out0)
+                        # elif args.hidden == 1:
+                        #     out = net.fc4(out0)
                         L_cls = args.alpha * criterion(out, labels)
                         _, preds = torch.max(out, 1)
                         epoch_correct += torch.sum(preds == labels.data)
                     else:
-                        if args.hidden == 0:
+                        if args.hidden == 0 or 1:
                             out = net.fc3(middle)
-                        elif args.hidden == 1:
-                            out = net.fc4(out)
+                        # elif args.hidden == 1:
+                        #     out = net.fc4(out)
                         out0, out1 = torch.split(out, img0.size()[0], dim=0)
 
                         for out_ in [out0, out1]:
@@ -177,7 +177,7 @@ def trainer(
                     os.path.join(weight_save_dir, f"{epoch+1}_weight.pth"),
                 )
             save_epoch = [1, 3, 5, 7, 10, 15, 20, 30, 40, 50, 60, 70, 90]
-            if epoch in save_epoch:
+            if (epoch + 1) in save_epoch:
                 torch.save(
                     net.state_dict(),
                     os.path.join(weight_save_dir, f"{epoch+1}_weight.pth"),

@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+import shutil
 from distutils.util import strtobool
 from glob import glob
 from math import log2
@@ -46,33 +47,39 @@ def get_ood_rank(x, test_score):
     return ood_rank
 
 
-def save_score(args, label_dict, score_dict, thu=-20000):
-    # phase_list = ["train", "test", "val", 'garbage']
-    # # phase_list = ["test", "ood"]
-    # plt.figure()
-    # for phase in phase_list:
-    #     # print(np.max(score_dict[phase]))
-    #     sns.distplot(score_dict[phase], label=phase, hist=False)
-    #     print('max ', np.max(score_dict[phase]))
-    #     print('min ', np.min(score_dict[phase]))
-    # if args.hidden == 0:
-    #     plt.xlim([-10000, 0])
-    # plt.legend()
-    # plt.savefig(os.path.join(args.output, "score_garbage.png"))
-    # plt.close()
+def save_score(args, label_dict, score_dict, ano_dict, ranch):
+    phase_list = ["val"]
+    # phase_list = ["test", "ood"]
+    plt.figure()
+    for phase in phase_list:
+        # print(np.max(score_dict[phase]))
+        sns.distplot(score_dict[phase], label=phase, hist=False)
+        print("max ", np.max(score_dict[phase]))
+        print("min ", np.min(score_dict[phase]))
+    plt.xlim([-100000, 0])
+    plt.legend()
+    plt.savefig(os.path.join(args.output, "score_garbage.png"))
+    plt.close()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(20, 10))
-    ax1.set_xlim(thu, 0)
-    ax2.set_xlim(thu, 0)
+    ax1.set_xlim(args.thu, 0)
+    ax2.set_xlim(args.thu, 0)
     id = ["train", "test", "val"]
     ood = ["ood", "garbage"]
+
     for phase in id:
-        sns.distplot(score_dict[phase], label=phase, hist=True, ax=ax1, bins=100)
+        extract = score_dict[phase][np.where(score_dict[phase] > args.thu)[0]]
+        sns.distplot(extract, label=phase, hist=True, ax=ax1, bins=100)
     for phase in ood:
-        print("raw: ", len(score_dict[phase]))
-        extract = score_dict[phase][np.where(score_dict[phase] > thu)[0]]
-        print("extracted: ", len(extract))
-        sns.distplot(extract, label=phase, hist=True, ax=ax2, bins=100)
+        extract = score_dict[phase][np.where(score_dict[phase] > args.thu)[0]]
+        extract_ano = ano_dict[phase][np.where(score_dict[phase] > args.thu)[0]]
+        if phase == "garbage":
+            for i in range(len(ranch)):
+                extract_ranch = extract[np.where(extract_ano == i)[0]]
+                print(extract_ranch)
+                sns.distplot(extract_ranch, label=ranch[i], hist=True, ax=ax2)
+        else:
+            sns.distplot(extract, label=phase, hist=True, ax=ax2, bins=100)
     ax1.set_xlabel("ood score s(x)")
     ax2.set_xlabel("ood score s(x)")
     fig.suptitle("ood score comparison (Epoch: {})".format(args.epoch), fontsize=16)
@@ -83,10 +90,11 @@ def save_score(args, label_dict, score_dict, thu=-20000):
     plt.close()
 
 
-def evaluate(args, net, dataloaders_dict, device):
+def evaluate(args, net, dataloaders_dict, device, extract_path, ranch):
     phase_list = ["train", "test", "val", "ood", "garbage"]
     torch.backends.cudnn.benchmark = True
     label_dict = dict()
+    ano_dict = dict()
     score_dict = dict()
 
     for phase in phase_list:
@@ -100,12 +108,18 @@ def evaluate(args, net, dataloaders_dict, device):
             out, middle = net(image)
             pos = nn.functional.softmax(net.fc3(middle), dim=1)
 
-            if args.hidden == 0:
+            if args.hidden == 0 or 1:
                 features = middle if i == 0 else torch.cat([features, middle], dim=0)
-            elif args.hidden == 1:
-                features = out if i == 0 else torch.cat([features, out], dim=0)
+            # elif args.hidden == 1:
+            #     features = out if i == 0 else torch.cat([features, out], dim=0)
             labels = label if i == 0 else torch.cat([labels, label], dim=0)
             poses = pos if i == 0 else torch.cat([poses, pos], dim=0)
+            # if phase == "ood":
+            #     all_image = (
+            #         image.cpu().data.numpy()
+            #         if i == 0
+            #         else np.concatenate((all_image, image.cpu().data.numpy()), axis=0)
+            #     )
         _, preds = torch.max(poses, 1)
 
         if phase == "train":
@@ -131,14 +145,26 @@ def evaluate(args, net, dataloaders_dict, device):
             ind = np.append(ind, int(score_label))
         label_dict[phase] = ind
         score_dict[phase] = score
+        ano_dict[phase] = labels.cpu().data.numpy()
+        # np.save(os.path.join(args.output, f"{phase}_pos.npy"), poses.cpu().data.numpy())
+        # np.save(
+        #     os.path.join(args.output, f"{phase}_label.npy"), labels.cpu().data.numpy()
+        # )
+        # np.save(os.path.join(args.output, f"{phase}_score.npy"), score)
 
-        np.save(os.path.join(args.output, f"{phase}_pos.npy"), poses.cpu().data.numpy())
-        np.save(
-            os.path.join(args.output, f"{phase}_label.npy"), labels.cpu().data.numpy()
-        )
-        np.save(os.path.join(args.output, f"{phase}_score.npy"), score)
+    # score_extract = score_dict["ood"]
+    # print(len(score_extract))
+    # for image, score in zip(all_image, score_extract):
+    #     image = np.transpose(image, (1, 2, 0)) * 255
 
-    save_score(args, label_dict, score_dict)
+    #     far_dir = os.path.join(args.output, "far_id_ood")
+    #     near_dir = os.path.join(args.output, "near_id_ood")
+    #     if score > -2500:  # id
+    #         save_name = os.path.join(near_dir, f"{str(score)}_ood.jpg")
+    #     elif score <= 2500:
+    #         save_name = os.path.join(far_dir, f"{str(score)}_ood.jpg")
+    #     cv2.imwrite(save_name, image)
+    save_score(args, label_dict, score_dict, ano_dict, ranch)
 
     return score_dict, label_dict
 
@@ -159,16 +185,35 @@ def main(args):
     y_train = data["y_train"]
     y_test = data["y_test"]
 
-    val_path = glob("/mnt/aoni02/matsunaga/10_cropped-images/all_id/*/*.jpg")
+    if args.ranch:
+        val_path = glob(
+            "/mnt/aoni02/matsunaga/Dataset/200313_global-model-ranch/garbage_ver3/ood_ranch/*/*/*"
+        )
+
+    else:
+        val_path = glob("/mnt/aoni02/matsunaga/10_cropped-images/all_id/*/*.jpg")
     val_label = [2 for _ in range(len(val_path))]
 
     ood_path = glob(os.path.join(args.ood, "*/*.jpg"))
     ood_label = [3 for _ in range(len(ood_path))]
 
-    garbage_path = glob(
-        "/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*"
-    )
-    garbage_label = [4 for _ in range(len(garbage_path))]
+    if args.ranch:
+        garbage_dir = glob(
+            "/mnt/aoni02/matsunaga/Dataset/200313_global-model-ranch/garbage_ver3/train/garbage/*"
+        )
+        ranch = [os.path.basename(dir) for dir in garbage_dir]
+        print(ranch)
+        garbage_path = []
+        garbage_label = []
+        for i, dir in enumerate(garbage_dir):
+            img = glob(os.path.join(dir, "*"))
+            garbage_path.extend(img)
+            garbage_label.extend([i for _ in range(len(img))])
+    else:
+        garbage_path = glob(
+            "/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*"
+        )
+        garbage_label = [4 for _ in range(len(garbage_path))]
 
     transforms = ImageTransform(batchsize=args.batchsize)
 
@@ -217,7 +262,9 @@ def main(args):
     print("garbage: ", len(garbage_dataloader.dataset))
 
     ood_rank = dict()
-    score_dict, label_dict = evaluate(args, net, dataloaders_dict, device=device)
+    score_dict, label_dict = evaluate(
+        args, net, dataloaders_dict, device=device, extract_path=ood_path, ranch=ranch
+    )
     for phase in phase_list:
         if phase == "test":
             test_score = score_dict[phase]
@@ -235,6 +282,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epoch", type=str)
+    parser.add_argument("--ranch", type=strtobool)
     parser.add_argument("--id", type=str)
     parser.add_argument("--ood", type=str)
     parser.add_argument("--weight", type=str)
@@ -242,6 +290,7 @@ if __name__ == "__main__":
     parser.add_argument("--batchsize", type=int, default=128)
     parser.add_argument("--output", type=str)
     parser.add_argument("--n_cls", type=int, default=2)
+    parser.add_argument("--thu", type=int)
     parser.add_argument(
         "--gpuid",
         type=str,
