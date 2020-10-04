@@ -48,22 +48,25 @@ def get_ood_rank(x, test_score):
 
 
 def save_score(args, label_dict, score_dict, ano_dict, ranch):
-    phase_list = ["val"]
-    # phase_list = ["test", "ood"]
-    plt.figure()
-    for phase in phase_list:
-        # print(np.max(score_dict[phase]))
-        sns.distplot(score_dict[phase], label=phase, hist=False)
-        print("max ", np.max(score_dict[phase]))
-        print("min ", np.min(score_dict[phase]))
-    plt.xlim([-100000, 0])
-    plt.legend()
-    plt.savefig(os.path.join(args.output, "score_garbage.png"))
-    plt.close()
+    # phase_list = ["val"]
+    # # phase_list = ["test", "ood"]
+    # plt.figure()
+    # for phase in phase_list:
+    #     # print(np.max(score_dict[phase]))
+    #     sns.distplot(score_dict[phase], label=phase, hist=False)
+    #     print("max ", np.max(score_dict[phase]))
+    #     print("min ", np.min(score_dict[phase]))
+    # plt.xlim([-100000, 0])
+    # plt.legend()
+    # plt.savefig(os.path.join(args.output, "score_garbage.png"))
+    # plt.close()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(20, 10))
     ax1.set_xlim(args.thu, 0)
     ax2.set_xlim(args.thu, 0)
+    ax1.grid(axis="x", linestyle="-", color="gray")
+    ax2.grid(axis="x", linestyle="-", color="gray")
+
     id = ["train", "test", "val"]
     ood = ["ood", "garbage"]
 
@@ -73,20 +76,28 @@ def save_score(args, label_dict, score_dict, ano_dict, ranch):
     for phase in ood:
         extract = score_dict[phase][np.where(score_dict[phase] > args.thu)[0]]
         extract_ano = ano_dict[phase][np.where(score_dict[phase] > args.thu)[0]]
-        if phase == "garbage":
-            for i in range(len(ranch)):
-                extract_ranch = extract[np.where(extract_ano == i)[0]]
-                print(extract_ranch)
-                sns.distplot(extract_ranch, label=ranch[i], hist=True, ax=ax2)
+        if args.ranch:
+            if phase == "garbage":
+                for i in range(len(ranch)):
+                    if ranch[i] == "higasimura":
+                        extract_higasimura = extract[np.where(extract_ano == i)[0]]
+                        others = extract[np.where(extract_ano != i)[0]]
+                        sns.distplot(
+                            extract_higasimura, label="higashimura", hist=False, ax=ax2
+                        )
+                        sns.distplot(others, label="others", hist=False, ax=ax2)
         else:
-            sns.distplot(extract, label=phase, hist=True, ax=ax2, bins=100)
+            sns.distplot(extract, label=phase, hist=True, ax=ax2)
+
     ax1.set_xlabel("ood score s(x)")
     ax2.set_xlabel("ood score s(x)")
+    ax1.set_title("OOD Score (In Distribution Data)")
+    ax2.set_title("OOD Score (Out of Distribution Data)")
     fig.suptitle("ood score comparison (Epoch: {})".format(args.epoch), fontsize=16)
     ax1.legend()
     ax2.legend()
 
-    fig.savefig(os.path.join(args.output, "score_subplot.png"))
+    fig.savefig(os.path.join(args.output, "thu20000_lowent.png"))
     plt.close()
 
 
@@ -151,7 +162,8 @@ def evaluate(args, net, dataloaders_dict, device, extract_path, ranch):
         #     os.path.join(args.output, f"{phase}_label.npy"), labels.cpu().data.numpy()
         # )
         # np.save(os.path.join(args.output, f"{phase}_score.npy"), score)
-
+        preds_np = preds.cpu().data.numpy()
+        np.save(os.path.join(args.output, f"{phase}_preds.npy"), preds_np)
     # score_extract = score_dict["ood"]
     # print(len(score_extract))
     # for image, score in zip(all_image, score_extract):
@@ -194,7 +206,7 @@ def main(args):
         val_path = glob("/mnt/aoni02/matsunaga/10_cropped-images/all_id/*/*.jpg")
     val_label = [2 for _ in range(len(val_path))]
 
-    ood_path = glob(os.path.join(args.ood, "*/*.jpg"))
+    ood_path = glob(os.path.join(args.ood, "*/*"))
     ood_label = [3 for _ in range(len(ood_path))]
 
     if args.ranch:
@@ -214,6 +226,7 @@ def main(args):
             "/mnt/aoni02/matsunaga/Dataset/200313_global-model/garbage_ver3/train/garbage/*"
         )
         garbage_label = [4 for _ in range(len(garbage_path))]
+        ranch = []
 
     transforms = ImageTransform(batchsize=args.batchsize)
 
@@ -282,19 +295,18 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epoch", type=str)
-    parser.add_argument("--ranch", type=strtobool)
+    parser.add_argument("--ranch", type=strtobool, default=False)
     parser.add_argument("--id", type=str)
-    parser.add_argument("--ood", type=str)
+    parser.add_argument(
+        "--ood", type=str, default="/mnt/aoni02/matsunaga/ImageNet/cow_resemble"
+    )
     parser.add_argument("--weight", type=str)
-    parser.add_argument("--hidden", type=int, help="0:2048, 1:128")
+    parser.add_argument("--hidden", type=int, help="0:2048, 1:128", default=0)
     parser.add_argument("--batchsize", type=int, default=128)
     parser.add_argument("--output", type=str)
     parser.add_argument("--n_cls", type=int, default=2)
-    parser.add_argument("--thu", type=int)
-    parser.add_argument(
-        "--gpuid",
-        type=str,
-    )
+    parser.add_argument("--thu", type=int, default=-20000)
+    parser.add_argument("--gpuid", type=str, default="0")
 
     args = parser.parse_args()
     if not os.path.exists(args.output):
